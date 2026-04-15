@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Корпоративный AI поиск</title>
+    <title>Корпоративный AI поиск - отладка</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mammoth@1.4.2/mammoth.browser.min.js"></script>
     <style>
@@ -81,19 +81,20 @@
         .model-item:hover { background: #ffcc00; }
         .model-item.selected { background: #ffcc00; font-weight: 600; }
         
-        /* Логгер */
         .log-panel { background: #1a1a2e; border-radius: 12px; margin-top: 20px; overflow: hidden; }
         .log-header { background: #0d0d1a; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
         .log-header h4 { color: #ffcc00; font-size: 14px; }
         .log-clear { background: none; border: none; color: #999; cursor: pointer; font-size: 12px; }
         .log-clear:hover { color: #ffcc00; }
-        .log-content { max-height: 300px; overflow-y: auto; padding: 10px; font-family: 'Monaco', 'Courier New', monospace; font-size: 11px; display: none; }
+        .log-content { max-height: 400px; overflow-y: auto; padding: 10px; font-family: 'Monaco', 'Courier New', monospace; font-size: 11px; display: none; }
         .log-content.open { display: block; }
-        .log-entry { padding: 5px 8px; margin: 2px 0; border-radius: 4px; border-left: 3px solid; }
+        .log-entry { padding: 5px 8px; margin: 2px 0; border-radius: 4px; border-left: 3px solid; white-space: pre-wrap; word-break: break-all; }
         .log-info { border-left-color: #48bb78; background: #2a2a3e; color: #ccc; }
         .log-error { border-left-color: #e53e3e; background: #3a2a2e; color: #ffaaaa; }
         .log-success { border-left-color: #48bb78; background: #2a3a2e; color: #aaffaa; }
         .log-warning { border-left-color: #ffcc00; background: #3a3a2e; color: #ffdd88; }
+        .log-request { border-left-color: #667eea; background: #2a2a4e; color: #aaccff; }
+        .log-response { border-left-color: #48bb78; background: #2a3a2e; color: #aaffaa; }
         .log-time { color: #888; font-size: 10px; margin-right: 10px; }
         
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -112,7 +113,7 @@
                 <button class="tab active" onclick="switchTab('search')">🔍 Поиск</button>
                 <button class="tab" onclick="switchTab('settings')">⚙️ Настройки</button>
                 <button class="tab" onclick="switchTab('index')">📊 Индексация</button>
-                <button class="tab" onclick="switchTab('logs')">📋 Логи</button>
+                <button class="tab" onclick="switchTab('logs')">📋 Логи (технические)</button>
             </div>
 
             <!-- Вкладка поиска -->
@@ -185,7 +186,6 @@
                         </div>
                     </div>
                     
-                    <!-- Доп. поля для Yandex AI Studio -->
                     <div id="yandexExtra" style="display: none; margin-top: 15px;">
                         <div class="setting-group">
                             <label>Folder ID (ID каталога)</label>
@@ -193,13 +193,12 @@
                         </div>
                         <div class="alert alert-info" style="margin-top: 10px; font-size: 12px;">
                             💡 <strong>Для Yandex AI Studio:</strong><br>
-                            • API Key: ваш секретный ключ (скрыт звездочками в скрине)<br>
+                            • API Key: ваш секретный ключ<br>
                             • Folder ID: b1gpq3uo6bo34i46gmjn<br>
                             • Модель: yandexgpt-5-lite
                         </div>
                     </div>
                     
-                    <!-- Доп. поля для Ollama -->
                     <div id="ollamaExtra" style="display: none; margin-top: 15px;">
                         <div class="settings-row">
                             <div class="setting-group">
@@ -224,6 +223,7 @@
                     <div style="margin-top: 15px;">
                         <button class="btn btn-primary" onclick="saveLLMSettings()">💾 Сохранить</button>
                         <button class="btn btn-success" onclick="testLLM()">🧪 Тестировать LLM</button>
+                        <button class="btn btn-secondary" onclick="testDirectCurl()">📡 Тест прямым запросом (curl)</button>
                     </div>
                 </div>
             </div>
@@ -263,10 +263,10 @@
             <div id="logs-tab" class="tab-content">
                 <div class="log-panel">
                     <div class="log-header" onclick="toggleLogs()">
-                        <h4>📋 Лог операций</h4>
+                        <h4>📋 Технический лог (запросы/ответы/ошибки)</h4>
                         <button class="log-clear" onclick="clearLogs(event)">Очистить</button>
                     </div>
-                    <div id="logContent" class="log-content">
+                    <div id="logContent" class="log-content open">
                         <div class="log-entry log-info">📌 Система готова к работе</div>
                     </div>
                 </div>
@@ -287,11 +287,9 @@
             const time = new Date().toLocaleTimeString('ru-RU');
             const entry = document.createElement('div');
             entry.className = `log-entry log-${type}`;
-            entry.innerHTML = `<span class="log-time">[${time}]</span> ${message}`;
+            entry.innerHTML = `<span class="log-time">[${time}]</span> ${escapeHtml(message)}`;
             logContent.appendChild(entry);
             entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            
-            // Также выводим в консоль для отладки
             console.log(`[${type.toUpperCase()}] ${message}`);
         }
         
@@ -307,7 +305,7 @@
             addLog('Лог очищен', 'info');
         }
         
-        // Загрузка/сохранение индекса
+        // Загрузка/сохранение индекса (упрощенно для отладки)
         function loadIndex() {
             const savedIndex = localStorage.getItem('document_index');
             const savedVocab = localStorage.getItem('vocabulary');
@@ -351,7 +349,7 @@
             document.getElementById('vocabSize').innerHTML = vocabulary?.length || 0;
         }
         
-        // Стемминг и векторы
+        // Стемминг и векторы (упрощенно)
         function stemRussian(word) {
             if (word.length < 3) return word;
             const suffixes = ['овать', 'евать', 'ивать', 'ывать', 'нуть', 'ти', 'ть', 'ется', 'ешь', 'ит', 'ют', 'ут', 'ат', 'ят', 'ать', 'ять', 'ить', 'ение', 'ание'];
@@ -386,7 +384,6 @@
             return dot / (Math.sqrt(magA) * Math.sqrt(magB) + 1e-8);
         }
         
-        // Извлечение текста из PDF/DOCX
         async function extractTextFromPDF(url, token) {
             try {
                 const response = await fetch(url, { headers: { 'Authorization': `OAuth ${token}` } });
@@ -438,7 +435,7 @@
             progressDiv.style.display = 'block';
             
             const supported = files.filter(f => ['pdf','docx','txt','md'].includes(f.name.split('.').pop().toLowerCase()));
-            addLog(`Найдено ${supported.length} поддерживаемых файлов для индексации`, 'info');
+            addLog(`Найдено ${supported.length} поддерживаемых файлов`, 'info');
             
             const newMetadata = [];
             const allTokens = [];
@@ -460,9 +457,7 @@
                     const tokens = tokenize(content);
                     allTokens.push(...tokens);
                     newMetadata.push({ name: file.name, path: file.path, modified: file.modified, file: file.file, ext });
-                } catch(e) { 
-                    addLog(`Ошибка индексации ${file.name}: ${e.message}`, 'error');
-                }
+                } catch(e) { addLog(`Ошибка индексации ${file.name}: ${e.message}`, 'error'); }
             }
             
             fileMetadata = newMetadata;
@@ -482,10 +477,7 @@
                         content = await resp.text();
                     }
                     documentIndex[i] = buildVector(tokenize(content), vocabulary);
-                } catch(e) { 
-                    documentIndex[i] = new Array(vocabulary.length).fill(0);
-                    addLog(`Ошибка векторизации ${doc.name}: ${e.message}`, 'error');
-                }
+                } catch(e) { documentIndex[i] = new Array(vocabulary.length).fill(0); }
             }
             
             saveIndex();
@@ -511,7 +503,6 @@
             let files = await getAllFiles(token, folderPath);
             if (fromDate) files = files.filter(f => new Date(f.modified) >= new Date(fromDate));
             if (toDate) files = files.filter(f => new Date(f.modified) <= new Date(toDate + 'T23:59:59'));
-            addLog(`Индексация за период: ${fromDate || 'начало'} - ${toDate || 'конец'}, найдено ${files.length} файлов`, 'info');
             await indexFiles(files, token);
         }
         
@@ -524,15 +515,11 @@
             return scores.slice(0, topK).filter(s => s.score > 0.01);
         }
         
-        // ============ LLM Провайдеры ============
+        // ============ YANDEX AI STUDIO С РАСШИРЕННЫМ ЛОГИРОВАНИЕМ ============
         
-        // Yandex AI Studio - правильный формат из вашего скрина
         async function callYandexAIStudio(prompt, apiKey, folderId, model) {
-            addLog(`📤 Yandex AI Studio запрос: модель=${model}, folder=${folderId}`, 'info');
-            
-            // Формируем URI модели по формату из скрина: gpt://{folder_id}/{model}/latest
             const modelUri = `gpt://${folderId}/${model}/latest`;
-            addLog(`📤 Model URI: ${modelUri}`, 'info');
+            const url = 'https://ai.api.cloud.yandex.net/v1/responses';
             
             const requestBody = {
                 model: modelUri,
@@ -542,11 +529,22 @@
                 max_output_tokens: 500
             };
             
-            addLog(`📤 URL: https://ai.api.cloud.yandex.net/v1/responses`, 'info');
-            addLog(`📤 Заголовки: Authorization=Api-Key ***, OpenAI-Project=${folderId}`, 'info');
+            // Детальное логирование запроса
+            addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+            addLog(`📤 [REQUEST] Yandex AI Studio`, 'request');
+            addLog(`📤 URL: ${url}`, 'request');
+            addLog(`📤 Method: POST`, 'request');
+            addLog(`📤 Headers:`, 'request');
+            addLog(`   Authorization: Api-Key ${apiKey.substring(0, 10)}...${apiKey.substring(apiKey.length-4)}`, 'request');
+            addLog(`   OpenAI-Project: ${folderId}`, 'request');
+            addLog(`   Content-Type: application/json`, 'request');
+            addLog(`📤 Body: ${JSON.stringify(requestBody, null, 2)}`, 'request');
+            addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+            
+            const startTime = Date.now();
             
             try {
-                const response = await fetch('https://ai.api.cloud.yandex.net/v1/responses', {
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -556,22 +554,74 @@
                     body: JSON.stringify(requestBody)
                 });
                 
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    addLog(`❌ HTTP ошибка ${response.status}: ${errorText}`, 'error');
-                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                const elapsed = Date.now() - startTime;
+                addLog(`⏱️ Время выполнения: ${elapsed}ms`, 'info');
+                addLog(`📥 [RESPONSE] Status: ${response.status} ${response.statusText}`, 'response');
+                
+                // Логируем все заголовки ответа
+                addLog(`📥 Response Headers:`, 'response');
+                for (let [key, value] of response.headers.entries()) {
+                    if (key.toLowerCase().includes('auth')) value = '***';
+                    addLog(`   ${key}: ${value}`, 'response');
                 }
                 
-                const data = await response.json();
-                addLog(`✅ Yandex AI Studio ответ получен`, 'success');
-                addLog(`📥 Ответ: ${JSON.stringify(data).substring(0, 200)}...`, 'info');
+                const responseText = await response.text();
+                addLog(`📥 Response Body: ${responseText.substring(0, 2000)}`, 'response');
                 
-                // Responses API возвращает output_text или output
-                return data.output_text || data.output || 'Ошибка: пустой ответ от Yandex AI Studio';
-            } catch(e) {
-                addLog(`❌ Ошибка Yandex AI Studio: ${e.message}`, 'error');
-                return `❌ Ошибка Yandex AI Studio: ${e.message}`;
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${responseText.substring(0, 200)}`);
+                }
+                
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch(e) {
+                    throw new Error(`Невалидный JSON ответ: ${responseText.substring(0, 200)}`);
+                }
+                
+                const output = data.output_text || data.output || data.choices?.[0]?.message?.content;
+                if (!output) {
+                    addLog(`⚠️ Ответ не содержит output_text/output. Полный ответ: ${JSON.stringify(data)}`, 'warning');
+                    return `Ошибка: ответ не содержит текста. Полный ответ: ${JSON.stringify(data)}`;
+                }
+                
+                addLog(`✅ Успешный ответ от Yandex AI Studio`, 'success');
+                return output;
+                
+            } catch(error) {
+                addLog(`❌ [ERROR] ${error.message}`, 'error');
+                addLog(`❌ Тип ошибки: ${error.name}`, 'error');
+                if (error.cause) addLog(`❌ Причина: ${error.cause}`, 'error');
+                return `❌ Ошибка Yandex AI Studio: ${error.message}`;
             }
+        }
+        
+        // Тест прямым запросом через fetch с детальным логированием
+        async function testDirectCurl() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const folderId = document.getElementById('folderId').value.trim();
+            const model = document.getElementById('modelSelect').value;
+            
+            if (!apiKey || !folderId) {
+                addLog('❌ Не заполнены API Key или Folder ID', 'error');
+                showNotification('Заполните API Key и Folder ID', 'error');
+                return;
+            }
+            
+            addLog(`🔧 Прямой тест API Yandex AI Studio`, 'info');
+            addLog(`🔧 API Key: ${apiKey.substring(0, 10)}...${apiKey.substring(apiKey.length-4)}`, 'info');
+            addLog(`🔧 Folder ID: ${folderId}`, 'info');
+            addLog(`🔧 Модель: ${model}`, 'info');
+            
+            const result = await callYandexAIStudio(
+                "Скажи 'OK, всё работает' и больше ничего",
+                apiKey,
+                folderId,
+                model
+            );
+            
+            addLog(`📢 Результат теста: ${result.substring(0, 500)}`, result.includes('Ошибка') ? 'error' : 'success');
+            showNotification(result.includes('Ошибка') ? 'Тест провален' : 'Тест успешен!', result.includes('Ошибка') ? 'error' : 'success');
         }
         
         async function callGigaChat(prompt, apiKey, model) {
@@ -734,7 +784,6 @@ ${contextChunks.join('\n')}
                         const folderId = document.getElementById('folderId').value;
                         if (!folderId) throw new Error('Введите Folder ID');
                         if (!apiKey) throw new Error('Введите API Key');
-                        addLog(`🚀 Вызов Yandex AI Studio`, 'info');
                         return await callYandexAIStudio(prompt, apiKey, folderId, model);
                     case 'gigachat':
                         if (!apiKey) throw new Error('Введите API Key');
@@ -905,7 +954,17 @@ ${contextChunks.join('\n')}
             if (provider === 'none') { showNotification('Выберите провайдера', 'error'); return; }
             addLog(`🧪 Тестирование LLM (${provider})...`, 'info');
             showNotification('Тестирование LLM...', 'info');
-            const answer = await generateAnswer('Скажи "OK, всё работает"', ['Тест']);
+            
+            let answer;
+            if (provider === 'yandex') {
+                const apiKey = document.getElementById('apiKey').value;
+                const folderId = document.getElementById('folderId').value;
+                const model = document.getElementById('modelSelect').value;
+                answer = await callYandexAIStudio("Скажи 'OK, всё работает' и больше ничего", apiKey, folderId, model);
+            } else {
+                answer = await generateAnswer('Скажи "OK, всё работает"', ['Тест']);
+            }
+            
             showNotification(`Ответ: ${answer.substring(0, 150)}`, answer.includes('Ошибка') ? 'error' : 'success');
             if (!answer.includes('Ошибка')) {
                 addLog(`✅ LLM тест успешен: ${answer.substring(0, 100)}...`, 'success');
@@ -1000,6 +1059,7 @@ ${contextChunks.join('\n')}
         });
         
         addLog('🚀 Система инициализирована. Перейдите в настройки для подключения.', 'success');
+        addLog('📌 Для просмотра детальных логов запросов/ответов используйте вкладку "Логи"', 'info');
     </script>
 </body>
 </html>
